@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>状态持久化诊断</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        button { margin: 5px; padding: 8px 16px; }
+        .output { background: #f5f5f5; padding: 10px; margin: 10px 0; white-space: pre-wrap; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>登录状态持久化诊断工具</h1>
+    
+    <div class="section">
+        <h3>步骤1: 检查当前存储状态</h3>
+        <button onclick="checkAllStorage()">检查所有存储</button>
+        <div id="storage-result" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h3>步骤2: 模拟登录流程</h3>
+        <button onclick="simulateLogin()">模拟登录</button>
+        <div id="login-result" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h3>步骤3: 检查状态恢复</h3>
+        <button onclick="simulatePageRefresh()">模拟页面刷新检查</button>
+        <div id="refresh-result" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h3>步骤4: 测试前端框架集成</h3>
+        <button onclick="testVueIntegration()">测试Vue状态管理</button>
+        <div id="vue-result" class="output"></div>
+    </div>
+
+    <script>
+        function log(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            container.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+        }
+
+        function checkAllStorage() {
+            const container = document.getElementById('storage-result');
+            container.innerHTML = '';
+            
+            log('storage-result', '=== 检查localStorage ===');
+            if (localStorage.length === 0) {
+                log('storage-result', 'localStorage为空', 'error');
+            } else {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    const value = localStorage.getItem(key);
+                    log('storage-result', `${key}: ${value}`);
+                }
+            }
+
+            log('storage-result', '\n=== 检查sessionStorage ===');
+            if (sessionStorage.length === 0) {
+                log('storage-result', 'sessionStorage为空');
+            } else {
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    const value = sessionStorage.getItem(key);
+                    log('storage-result', `${key}: ${value}`);
+                }
+            }
+
+            log('storage-result', '\n=== 检查Cookies ===');
+            if (document.cookie) {
+                const cookies = document.cookie.split(';');
+                cookies.forEach(cookie => {
+                    log('storage-result', cookie.trim());
+                });
+            } else {
+                log('storage-result', '没有发现cookies');
+            }
+        }
+
+        async function simulateLogin() {
+            const container = document.getElementById('login-result');
+            container.innerHTML = '';
+            
+            log('login-result', '开始模拟登录流程...');
+            
+            try {
+                // 1. 测试登录API
+                log('login-result', '1. 调用登录API...');
+                const loginResponse = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+
+                const loginData = await loginResponse.json();
+                if (loginData.status === 'success') {
+                    log('login-result', '✓ 登录API调用成功', 'success');
+                    const token = loginData.data.access_token;
+                    
+                    // 2. 模拟前端存储token（使用简单方式）
+                    log('login-result', '2. 存储token到localStorage...');
+                    localStorage.setItem('simple_token', token);
+                    localStorage.setItem('user_info', JSON.stringify(loginData.data.user));
+                    localStorage.setItem('login_time', Date.now().toString());
+                    log('login-result', '✓ token已存储', 'success');
+
+                    // 3. 立即测试获取用户信息
+                    log('login-result', '3. 测试获取用户信息API...');
+                    const profileResponse = await fetch('http://localhost:5000/api/auth/profile', {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    const profileData = await profileResponse.json();
+                    if (profileData.status === 'success') {
+                        log('login-result', '✓ 用户信息API调用成功', 'success');
+                        log('login-result', `用户信息: ${JSON.stringify(profileData.data, null, 2)}`);
+                    } else {
+                        log('login-result', '✗ 用户信息API调用失败', 'error');
+                        log('login-result', JSON.stringify(profileData, null, 2));
+                    }
+
+                } else {
+                    log('login-result', '✗ 登录API调用失败', 'error');
+                    log('login-result', JSON.stringify(loginData, null, 2));
+                }
+
+            } catch (error) {
+                log('login-result', `✗ 网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        function simulatePageRefresh() {
+            const container = document.getElementById('refresh-result');
+            container.innerHTML = '';
+            
+            log('refresh-result', '模拟页面刷新后的状态检查...');
+            
+            // 检查存储的数据是否还在
+            const token = localStorage.getItem('simple_token');
+            const userInfo = localStorage.getItem('user_info');
+            const loginTime = localStorage.getItem('login_time');
+
+            if (token) {
+                log('refresh-result', '✓ token存在', 'success');
+                log('refresh-result', `Token: ${token}`);
+                
+                if (userInfo) {
+                    log('refresh-result', '✓ 用户信息存在', 'success');
+                    log('refresh-result', `用户信息: ${userInfo}`);
+                } else {
+                    log('refresh-result', '✗ 用户信息丢失', 'error');
+                }
+
+                if (loginTime) {
+                    const timeElapsed = Date.now() - parseInt(loginTime);
+                    log('refresh-result', `登录时间: ${timeElapsed}ms前`);
+                }
+
+                // 测试token是否仍然有效
+                testTokenValidity(token);
+
+            } else {
+                log('refresh-result', '✗ token不存在或已丢失', 'error');
+            }
+        }
+
+        async function testTokenValidity(token) {
+            log('refresh-result', '\n测试token有效性...');
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    log('refresh-result', '✓ token仍然有效', 'success');
+                } else {
+                    log('refresh-result', '✗ token无效', 'error');
+                    log('refresh-result', JSON.stringify(data, null, 2));
+                }
+            } catch (error) {
+                log('refresh-result', `✗ token验证错误: ${error.message}`, 'error');
+            }
+        }
+
+        function testVueIntegration() {
+            const container = document.getElementById('vue-result');
+            container.innerHTML = '';
+            
+            log('vue-result', '检查Vue应用可能的问题...');
+            
+            // 检查是否有Vue相关的存储
+            const vueKeys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.includes('vue') || key.includes('pinia') || key.includes('secure') || key.includes('token')) {
+                    vueKeys.push(key);
+                }
+            }
+
+            if (vueKeys.length > 0) {
+                log('vue-result', '发现Vue相关存储:');
+                vueKeys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    log('vue-result', `${key}: ${value}`);
+                });
+            } else {
+                log('vue-result', '没有发现Vue相关存储');
+            }
+
+            // 测试当前页面是否可以访问Vue实例
+            if (window.Vue || window.__VUE__) {
+                log('vue-result', '✓ 检测到Vue环境', 'success');
+            } else {
+                log('vue-result', '✗ 未检测到Vue环境');
+            }
+
+            // 检查是否有Pinia store
+            if (window.__PINIA__) {
+                log('vue-result', '✓ 检测到Pinia状态管理', 'success');
+            } else {
+                log('vue-result', '✗ 未检测到Pinia状态管理');
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkAllStorage();
+        };
+    </script>
+</body>
+</html>

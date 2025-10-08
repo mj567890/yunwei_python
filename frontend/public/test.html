@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API测试</title>
+</head>
+<body>
+    <h1>API连接测试</h1>
+    <button onclick="testAPI()">测试登录API</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '测试中...';
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<pre>成功: ${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<pre>错误: ${response.status} - ${response.statusText}</pre>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<pre>网络错误: ${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

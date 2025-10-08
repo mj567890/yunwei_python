@@ -1,0 +1,120 @@
+# IT运维系统 - Docker Compose 配置
+# 包含应用、数据库、Redis等完整服务栈
+
+version: '3.8'
+
+services:
+  # 应用服务
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: it-ops-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USERNAME=${MYSQL_USERNAME:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-it_ops_system}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - app_uploads:/app/uploads
+      - app_logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - it-ops-network
+
+  # MySQL 数据库服务
+  mysql:
+    image: mysql:8.0
+    container_name: it-ops-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-it_ops_system}
+      - MYSQL_USER=${MYSQL_USERNAME:-itops}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - it-ops-network
+
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: it-ops-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - it-ops-network
+
+  # Nginx 反向代理服务 (可选)
+  nginx:
+    image: nginx:alpine
+    container_name: it-ops-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+      # SSL 证书挂载 (如果使用HTTPS)
+      # - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    networks:
+      - it-ops-network
+
+# 数据卷定义
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_uploads:
+    driver: local
+  app_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+
+# 网络定义
+networks:
+  it-ops-network:
+    driver: bridge

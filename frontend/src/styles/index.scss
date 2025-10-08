@@ -1,0 +1,283 @@
+/* 重置样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  font-size: 14px;
+  color: #303133;
+  background-color: #f5f7fa;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #dcdfe6;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #c0c4cc;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* 布局样式 */
+.layout-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-header {
+  height: 60px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.layout-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.layout-sidebar {
+  width: 220px;
+  background: #fff;
+  border-right: 1px solid #e4e7ed;
+  overflow-y: auto;
+}
+
+.layout-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f5f7fa;
+}
+
+/* 卡片样式 */
+.card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #303133;
+}
+
+/* 表格样式 */
+.table-container {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 表单样式 */
+.form-container {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+/* 按钮组样式 */
+.button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.button-group .el-button {
+  margin-left: 0;
+}
+
+/* 搜索表单样式 */
+.search-form {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.search-form .el-form-item {
+  margin-bottom: 16px;
+}
+
+/* 状态标签样式 */
+.status-tag {
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-success {
+  background: #f0f9ff;
+  color: #1890ff;
+  border: 1px solid #91d5ff;
+}
+
+.status-warning {
+  background: #fffbf0;
+  color: #fa8c16;
+  border: 1px solid #ffd591;
+}
+
+.status-danger {
+  background: #fff2f0;
+  color: #f5222d;
+  border: 1px solid #ffccc7;
+}
+
+.status-info {
+  background: #f6f7f9;
+  color: #606266;
+  border: 1px solid #dcdfe6;
+}
+
+/* 统计卡片样式 */
+.stats-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card .number {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.stats-card .label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* 响应式样式 */
+@media (max-width: 768px) {
+  .layout-sidebar {
+    width: 200px;
+  }
+  
+  .layout-content {
+    padding: 16px;
+  }
+  
+  .search-form {
+    padding: 16px;
+  }
+  
+  .card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 576px) {
+  .layout-main {
+    flex-direction: column;
+  }
+  
+  .layout-sidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid #e4e7ed;
+  }
+  
+  .layout-content {
+    padding: 12px;
+  }
+}
+
+/* 工具类 */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mb-20 {
+  margin-bottom: 20px;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.p-20 {
+  padding: 20px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 动画效果 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.3s cubic-bezier(1, 0.5, 0.8, 1);
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}

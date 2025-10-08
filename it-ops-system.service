@@ -1,0 +1,60 @@
+# IT运维系统 - systemd 服务配置文件
+# 文件位置: /etc/systemd/system/it-ops-system.service
+
+[Unit]
+Description=IT运维综合管理系统
+After=network.target mysql.service redis.service
+Wants=mysql.service redis.service
+
+[Service]
+# 服务类型
+Type=notify
+
+# 运行用户和组
+User=www-data
+Group=www-data
+
+# 工作目录
+WorkingDirectory=/var/www/it-ops-system
+
+# 启动命令
+ExecStart=/var/www/it-ops-system/venv/bin/gunicorn -c gunicorn.conf.py backend.run:app
+
+# 重启策略
+Restart=always
+RestartSec=10
+
+# 环境变量文件
+EnvironmentFile=/var/www/it-ops-system/.env
+
+# 进程管理
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 安全配置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/it-ops-system/backend/uploads
+ReadWritePaths=/var/www/it-ops-system/backend/logs
+ReadWritePaths=/var/log/it-ops
+
+# 标准输出和错误输出
+StandardOutput=journal
+StandardError=journal
+
+# 服务启动前执行的命令 (可选)
+# ExecStartPre=/bin/mkdir -p /var/log/it-ops
+# ExecStartPre=/bin/chown www-data:www-data /var/log/it-ops
+
+# 服务停止后执行的命令 (可选)
+# ExecStopPost=/bin/echo "IT运维系统服务已停止"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT运维系统 - 简化登录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Microsoft YaHei', Arial, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+        }
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-header h1 {
+            color: #303133;
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+        .login-header p {
+            color: #909399;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #606266;
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #dcdfe6;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #409eff;
+        }
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #409eff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .login-btn:hover:not(:disabled) {
+            background: #66b1ff;
+        }
+        .login-btn:disabled {
+            background: #c0c4cc;
+            cursor: not-allowed;
+        }
+        .message {
+            margin: 15px 0;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .success {
+            background: #f0f9ff;
+            color: #1890ff;
+            border: 1px solid #91d5ff;
+        }
+        .error {
+            background: #fff2f0;
+            color: #f5222d;
+            border: 1px solid #ffccc7;
+        }
+        .info {
+            background: #f6f7f9;
+            color: #606266;
+            border: 1px solid #dcdfe6;
+        }
+        .debug-info {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #909399;
+        }
+        .debug-info details {
+            margin-top: 10px;
+        }
+        .debug-info pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>IT运维管理系统</h1>
+            <p>简化版登录测试</p>
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" value="admin" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" value="admin123" required>
+            </div>
+            
+            <button type="submit" class="login-btn" id="loginBtn">登录</button>
+        </form>
+        
+        <div id="messageArea"></div>
+        
+        <div class="debug-info">
+            <p><strong>调试信息:</strong></p>
+            <p>前端地址: <span id="frontendUrl"></span></p>
+            <p>后端地址: http://localhost:5000</p>
+            <p>API端点: http://localhost:5000/api/auth/login</p>
+            
+            <details>
+                <summary>🔧 调试工具</summary>
+                <button onclick="testBackend()" style="margin: 5px; padding: 5px 10px;">测试后端</button>
+                <button onclick="testCORS()" style="margin: 5px; padding: 5px 10px;">测试CORS</button>
+                <button onclick="window.open('network-debug.html', '_blank')" style="margin: 5px; padding: 5px 10px;">详细诊断</button>
+            </details>
+            
+            <div id="debugLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('frontendUrl').textContent = window.location.origin;
+            log('页面加载完成，开始初始化...');
+            
+            // 自动测试后端连接
+            testBackend();
+        });
+
+        // 登录表单处理
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await performLogin();
+        });
+
+        // 执行登录
+        async function performLogin() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
+            
+            if (!username || !password) {
+                showMessage('请输入用户名和密码', 'error');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中...';
+            showMessage('正在验证登录信息...', 'info');
+            log(`开始登录尝试 - 用户名: ${username}`);
+            
+            try {
+                const requestData = { username, password };
+                log('发送登录请求:', JSON.stringify(requestData));
+                
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    mode: 'cors',
+                    credentials: 'omit',
+                    body: JSON.stringify(requestData)
+                });
+                
+                log(`收到响应 - 状态码: ${response.status}`);
+                
+                const responseData = await response.json();
+                log('响应数据:', JSON.stringify(responseData, null, 2));
+                
+                if (response.ok && responseData.status === 'success') {
+                    showMessage('🎉 登录成功！正在跳转...', 'success');
+                    log('登录成功，准备跳转');
+                    
+                    // 存储token（简化版，使用明文存储用于调试）
+                    localStorage.setItem('access_token', responseData.data.access_token);
+                    localStorage.setItem('user_info', JSON.stringify(responseData.data.user));
+                    
+                    // 3秒后跳转到主页面
+                    setTimeout(() => {
+                        window.location.href = '/app/dashboard';
+                    }, 3000);
+                    
+                } else {
+                    const errorMsg = responseData.message || '登录失败';
+                    showMessage(`❌ ${errorMsg}`, 'error');
+                    log('登录失败:', errorMsg);
+                }
+                
+            } catch (error) {
+                log('网络请求异常:', error.message);
+                showMessage(`❌ 网络连接失败: ${error.message}`, 'error');
+                
+                // 提供详细的错误诊断
+                if (error.message.includes('fetch')) {
+                    showMessage('这通常是CORS配置问题，请检查后端服务状态', 'info');
+                }
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+            }
+        }
+
+        // 测试后端连接
+        async function testBackend() {
+            log('测试后端连接...');
+            try {
+                const response = await fetch('http://localhost:5000/', { 
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('后端连接正常:', data.message);
+                    showMessage('✅ 后端服务连接正常', 'success');
+                } else {
+                    log('后端响应异常:', response.status);
+                    showMessage(`❌ 后端响应异常: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log('后端连接失败:', error.message);
+                showMessage(`❌ 后端连接失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 测试CORS
+        async function testCORS() {
+            log('测试CORS配置...');
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                if (response.ok) {
+                    log('CORS预检成功');
+                    showMessage('✅ CORS配置正常', 'success');
+                } else {
+                    log('CORS预检失败:', response.status);
+                    showMessage(`❌ CORS配置异常: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log('CORS测试失败:', error.message);
+                showMessage(`❌ CORS测试失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 显示消息
+        function showMessage(message, type = 'info') {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="message ${type}">${message}</div>`;
+            
+            // 5秒后自动清除消息
+            if (type !== 'success') {
+                setTimeout(() => {
+                    messageArea.innerHTML = '';
+                }, 5000);
+            }
+        }
+
+        // 调试日志
+        function log(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const debugLog = document.getElementById('debugLog');
+            
+            let logEntry = `[${timestamp}] ${message}`;
+            if (data) {
+                logEntry += `\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
+            }
+            
+            console.log(logEntry);
+            
+            // 显示在调试区域
+            const pre = document.createElement('pre');
+            pre.textContent = logEntry;
+            pre.style.marginTop = '5px';
+            pre.style.fontSize = '10px';
+            pre.style.background = '#f0f0f0';
+            pre.style.padding = '5px';
+            pre.style.borderRadius = '3px';
+            
+            debugLog.appendChild(pre);
+            
+            // 限制日志条数
+            while (debugLog.children.length > 10) {
+                debugLog.removeChild(debugLog.firstChild);
+            }
+            
+            // 滚动到最新日志
+            pre.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    </script>
+</body>
+</html>

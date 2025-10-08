@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库测试 - IT运维系统</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .btn { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        .result { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-family: monospace; white-space: pre-wrap; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+        .status { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .status-online { background: #d4edda; color: #155724; }
+        .status-offline { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🔍 IT运维系统 - 数据库测试页面</h1>
+    
+    <div class="section">
+        <h2>🔐 用户认证测试</h2>
+        <button class="btn" onclick="testLogin()">测试登录 (admin/admin123)</button>
+        <button class="btn" onclick="testProfile()">获取用户信息</button>
+        <div id="auth-result" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📦 资产管理测试</h2>
+        <button class="btn" onclick="testAssets()">获取资产列表</button>
+        <button class="btn" onclick="testAddAsset()">新增测试资产</button>
+        <div id="asset-result" class="result"></div>
+        <div id="asset-table"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📊 统计数据测试</h2>
+        <button class="btn" onclick="testStatistics()">获取统计数据</button>
+        <div id="stats-result" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🏥 系统健康检查</h2>
+        <button class="btn" onclick="testHealth()">检查后端健康状态</button>
+        <div id="health-result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        let authToken = null;
+
+        function log(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = isError ? 'result error' : 'result success';
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const url = `${API_BASE}${endpoint}`;
+                const defaultOptions = {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                    }
+                };
+                
+                const response = await fetch(url, { ...defaultOptions, ...options });
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${data.message || '请求失败'}`);
+                }
+                
+                return data;
+            } catch (error) {
+                throw new Error(`网络错误: ${error.message}`);
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const result = await apiCall('/api/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+                
+                if (result.status === 'success') {
+                    authToken = result.data.access_token;
+                    log('auth-result', `✅ 登录成功！\n用户: ${result.data.user.real_name}\nToken: ${authToken.substring(0, 20)}...`);
+                } else {
+                    log('auth-result', `❌ 登录失败: ${result.message}`, true);
+                }
+            } catch (error) {
+                log('auth-result', `❌ 登录测试失败: ${error.message}`, true);
+            }
+        }
+
+        async function testProfile() {
+            try {
+                const result = await apiCall('/api/auth/profile');
+                log('auth-result', `✅ 用户信息获取成功！\n${JSON.stringify(result.data, null, 2)}`);
+            } catch (error) {
+                log('auth-result', `❌ 获取用户信息失败: ${error.message}`, true);
+            }
+        }
+
+        async function testAssets() {
+            try {
+                const result = await apiCall('/api/assets');
+                log('asset-result', `✅ 资产数据获取成功！\n总数: ${result.data.total} 条记录`);
+                
+                // 显示资产表格
+                displayAssetsTable(result.data.items);
+            } catch (error) {
+                log('asset-result', `❌ 获取资产数据失败: ${error.message}`, true);
+            }
+        }
+
+        async function testAddAsset() {
+            try {
+                // 这里模拟添加资产的API调用（需要后端实现）
+                const assetData = {
+                    asset_code: `TEST${Date.now()}`,
+                    name: '测试资产',
+                    brand: '测试品牌',
+                    model: '测试型号',
+                    category: '测试类别',
+                    status: '在用'
+                };
+                
+                log('asset-result', `📝 准备添加资产: ${JSON.stringify(assetData, null, 2)}\n\n⚠️ 注意：添加资产功能需要后端实现 POST /api/assets 接口`);
+            } catch (error) {
+                log('asset-result', `❌ 添加资产失败: ${error.message}`, true);
+            }
+        }
+
+        function displayAssetsTable(assets) {
+            const tableDiv = document.getElementById('asset-table');
+            if (!assets || assets.length === 0) {
+                tableDiv.innerHTML = '<p>暂无资产数据</p>';
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>资产编码</th>
+                            <th>资产名称</th>
+                            <th>品牌</th>
+                            <th>型号</th>
+                            <th>类别</th>
+                            <th>状态</th>
+                            <th>使用人</th>
+                            <th>部门</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            assets.forEach(asset => {
+                html += `
+                    <tr>
+                        <td>${asset.asset_code || '-'}</td>
+                        <td>${asset.name || '-'}</td>
+                        <td>${asset.brand || '-'}</td>
+                        <td>${asset.model || '-'}</td>
+                        <td>${asset.category || '-'}</td>
+                        <td><span class="status ${asset.status === '在用' ? 'status-online' : 'status-offline'}">${asset.status || '-'}</span></td>
+                        <td>${asset.user_name || '-'}</td>
+                        <td>${asset.user_department || '-'}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            tableDiv.innerHTML = html;
+        }
+
+        async function testStatistics() {
+            try {
+                const result = await apiCall('/api/statistics/overview');
+                log('stats-result', `✅ 统计数据获取成功！\n${JSON.stringify(result.data, null, 2)}`);
+            } catch (error) {
+                log('stats-result', `❌ 获取统计数据失败: ${error.message}`, true);
+            }
+        }
+
+        async function testHealth() {
+            try {
+                const result = await apiCall('/api/health');
+                log('health-result', `✅ 系统健康检查通过！\n${JSON.stringify(result, null, 2)}`);
+            } catch (error) {
+                log('health-result', `❌ 系统健康检查失败: ${error.message}`, true);
+            }
+        }
+
+        // 页面加载时自动检查系统状态
+        window.onload = function() {
+            testHealth();
+        };
+    </script>
+</body>
+</html>
