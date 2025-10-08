@@ -205,11 +205,11 @@ const canConnect = computed(() => {
 // 加载设备列表
 const loadDevices = async () => {
   try {
-    // 获取所有网络设备类别的资产
+    // 获取所有拓扑显示设备（基于can_topology字段）
     const response = await assetApi.getAssets({ 
       page: 1, 
       pageSize: 1000,
-      network_devices: 'true' 
+      topology_devices: 'true'  // 改为基于拓扑显示字段过滤
     } as any)
     if (response.success) {
       devices.value = response.data.list || []

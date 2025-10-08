@@ -291,10 +291,28 @@ def get_network_topology():
     print("=" * 50)
     try:
         print("📊 开始查询数据库...")
-        # 获取所有网络设备类型的资产（包含网络设备类别）
-        network_categories = ['交换机', '路由器', '防火墙', 'BRAS', '网关', '负载均衡器', '服务器', '工作站', '台式机', '笔记本', '网络设备']
-        assets = Asset.query.filter(Asset.category.in_(network_categories)).all()
-        print(f"📋 找到 {len(assets)} 个网络设备")
+        # 获取所有可用于拓扑显示的资产（基于asset_category表的can_topology字段）
+        from sqlalchemy import text
+        
+        # 查询可用于拓扑显示的资产
+        topology_query = text("""
+            SELECT a.* FROM it_asset a 
+            LEFT JOIN asset_category ac ON a.category = ac.name 
+            WHERE (ac.can_topology = 1 OR a.category IN (
+                '交换机', '路由器', '防火墙', 'BRAS', '网关', '负载均衡器', 
+                '服务器', '工作站', '台式机', '笔记本', '网络设备'
+            ))
+            AND a.id IS NOT NULL
+        """)
+        
+        result = db.session.execute(topology_query)
+        asset_rows = result.fetchall()
+        
+        # 将查询结果转换为Asset对象
+        asset_ids = [row[0] for row in asset_rows]  # 假设第一列是ID
+        assets = Asset.query.filter(Asset.id.in_(asset_ids)).all() if asset_ids else []
+        
+        print(f"📋 找到 {len(assets)} 个可拓扑显示的设备")
         
         nodes = []
         for asset in assets:
@@ -674,8 +692,9 @@ def get_assets():
         user_name = request.args.get('user_name', '').strip()
         warranty_status = request.args.get('warranty_status', '').strip()
         network_devices = request.args.get('network_devices', '').strip()
+        topology_devices = request.args.get('topology_devices', '').strip()  # 新增拓扑设备过滤
         
-        print(f"搜索参数: name={name}, brand={brand}, model={model}, category={category}, status={status}, user_name={user_name}, warranty_status={warranty_status}, network_devices={network_devices}")
+        print(f"搜索参数: name={name}, brand={brand}, model={model}, category={category}, status={status}, user_name={user_name}, warranty_status={warranty_status}, network_devices={network_devices}, topology_devices={topology_devices}")
         
         # 构建查询
         query = Asset.query
@@ -718,6 +737,32 @@ def get_assets():
             else:
                 # 如果没有配置网络设备类别，返回空结果
                 query = query.filter(Asset.id == -1)  # 不存在的ID
+        
+        # 拓扑设备过滤：根据类别管理中的can_topology字段
+        if topology_devices == 'true':
+            import sqlite3
+            import os
+            
+            db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # 获取所有标记为can_topology的类别
+            cursor.execute('''
+                SELECT name FROM asset_category 
+                WHERE can_topology = 1 AND (is_deleted = 0 OR is_deleted IS NULL)
+            ''')
+            topology_categories = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            
+            print(f"拓扑设备类别: {topology_categories}")
+            
+            if topology_categories:
+                query = query.filter(Asset.category.in_(topology_categories))
+            else:
+                # 如果没有配置拓扑设备类别，使用备用逻辑
+                fallback_categories = ['交换机', '路由器', '防火墙', 'BRAS', '网关', '负载均衡器', '服务器', '工作站', '台式机', '笔记本', '网络设备']
+                query = query.filter(Asset.category.in_(fallback_categories))
         
         # 获取数据（先不进行保修状态过滤，在内存中处理）
         # 获取总数（应用其他搜索条件后）
