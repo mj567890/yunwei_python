@@ -58,7 +58,6 @@
             </div>
             <div v-if="openMenus.network" class="nav-children">
               <router-link to="/app/network/topology" class="nav-child">网络拓扑</router-link>
-              <router-link to="/app/network/devices" class="nav-child">设备管理</router-link>
               <router-link to="/app/network/ports" class="nav-child">端口管理</router-link>
             </div>
           </div>
@@ -101,6 +100,9 @@
             </div>
             <div v-if="openMenus.dictionary" class="nav-children">
               <router-link to="/app/categories" class="nav-child">类别管理</router-link>
+              <router-link to="/app/dictionary/maintenance-types" class="nav-child">运维记录类型管理</router-link>
+              <router-link to="/app/dictionary/maintenance-categories" class="nav-child">运维维护类别管理</router-link>
+              <router-link to="/app/dictionary/departments" class="nav-child">组织机构管理</router-link>
             </div>
           </div>
           
@@ -165,9 +167,7 @@ const breadcrumbs = computed(() => {
     ],
     '/app/assets/create': [{ title: '资产管理', path: '/app/assets' }, { title: '新增资产' }],
     '/app/network/topology': [{ title: '网络管理', path: '/app/network' }, { title: '网络拓扑' }],
-    '/app/network/devices': [{ title: '网络管理', path: '/app/network' }, { title: '设备管理' }],
     '/app/network/ports': [{ title: '网络管理', path: '/app/network' }, { title: '端口管理' }],
-    '/app/network/devices/create': [{ title: '网络管理', path: '/app/network' }, { title: '设备管理', path: '/app/network/devices' }, { title: '新增设备' }],
     '/app/statistics': [{ title: '统计分析' }],
     '/app/maintenance': [{ title: '运维记录' }],
     '/app/maintenance/create': [{ title: '运维记录', path: '/app/maintenance' }, { title: '新增记录' }],
@@ -177,7 +177,11 @@ const breadcrumbs = computed(() => {
     '/app/users/create': [{ title: '用户管理', path: '/app/users' }, { title: '新增用户' }],
     '/app/files': [{ title: '文件管理' }],
     '/app/locations': [{ title: '位置管理' }],
-    '/app/settings': [{ title: '系统设置' }]
+    '/app/settings': [{ title: '系统设置' }],
+    '/app/categories': [{ title: '数据字典', path: '/app/dictionary' }, { title: '类别管理' }],
+    '/app/dictionary/maintenance-types': [{ title: '数据字典', path: '/app/dictionary' }, { title: '运维记录类型管理' }],
+    '/app/dictionary/maintenance-categories': [{ title: '数据字典', path: '/app/dictionary' }, { title: '运维维护类别管理' }],
+    '/app/dictionary/departments': [{ title: '数据字典', path: '/app/dictionary' }, { title: '组织机构管理' }]
   }
   
   // 处理动态路由（如详情页面）
@@ -192,10 +196,6 @@ const breadcrumbs = computed(() => {
       breadcrumb = [{ title: '用户管理', path: '/app/users' }, { title: '编辑用户' }]
     } else if (currentPath.match(/\/app\/network\/ports\/\d+$/)) {
       breadcrumb = [{ title: '网络管理', path: '/app/network' }, { title: '端口管理', path: '/app/network/ports' }, { title: '设备端口' }]
-    } else if (currentPath.match(/\/app\/network\/devices\/\d+$/)) {
-      breadcrumb = [{ title: '网络管理', path: '/app/network' }, { title: '设备管理', path: '/app/network/devices' }, { title: '设备详情' }]
-    } else if (currentPath.match(/\/app\/network\/devices\/\d+\/edit$/)) {
-      breadcrumb = [{ title: '网络管理', path: '/app/network' }, { title: '设备管理', path: '/app/network/devices' }, { title: '编辑设备' }]
     } else if (currentPath.match(/\/app\/faults\/\d+$/)) {
       breadcrumb = [{ title: '故障管理', path: '/app/faults' }, { title: '故障详情' }]
     } else if (currentPath.match(/\/app\/faults\/\d+\/edit$/)) {
@@ -225,6 +225,7 @@ const refreshPage = () => window.location.reload()
 watch(() => route.path, (path) => {
   if (path.includes('/assets')) openMenus.value.assets = true
   if (path.includes('/network')) openMenus.value.network = true
+  if (path.includes('/dictionary') || path.includes('/categories')) openMenus.value.dictionary = true
 }, { immediate: true })
 </script>
 

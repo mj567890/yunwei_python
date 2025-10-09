@@ -22,7 +22,7 @@
     <div v-if="!loading && devices.length > 0" class="statistics-summary">
       <div class="stat-card">
         <div class="stat-number">{{ devices.length }}</div>
-        <div class="stat-label">网络设备</div>
+        <div class="stat-label">拓扑设备</div>
       </div>
       <div class="stat-card">
         <div class="stat-number">{{ totalPorts }}</div>
@@ -53,7 +53,7 @@
 
       <div v-else-if="devices.length === 0" class="empty-state">
         <div class="empty-icon">📱</div>
-        <p>暂无网络设备</p>
+        <p>暂无拓扑设备</p>
         <router-link to="/app/assets/create" class="btn btn-primary">添加设备</router-link>
       </div>
 
@@ -227,11 +227,11 @@ const totalAvailablePorts = computed(() => {
 const loadDevices = async () => {
   loading.value = true
   try {
-    // 获取所有拓扑显示设备（基于can_topology字段）
+    // 获取所有可参与拓扑的设备（根据类别管理中的拓扑显示字段）
     const response = await assetApi.getAssets({ 
       page: 1, 
       pageSize: 1000,
-      topology_devices: 'true'  // 改为基于拓扑显示字段过滤
+      topology_devices: 'true'  // 根据can_topology字段筛选拓扑设备
     } as any)
     
     if (response.success) {

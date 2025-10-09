@@ -131,10 +131,10 @@ export const useUserStore = defineStore('user', {
     }
   },
   
-  // 启用持久化，保存用户状态
+  // 持久化用户状态，但需要在应用启动时验证token有效性
   persist: {
     key: 'user-store',
     storage: localStorage,
-    paths: ['isLoggedIn', 'userInfo', 'permissions']
+    paths: ['userInfo', 'permissions', 'isLoggedIn'] // 恢复 isLoggedIn 持久化
   }
 })

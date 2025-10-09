@@ -1,10 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { getSecureToken, isTokenExpired } from '@/utils/crypto'
 
 const routes = [
   {
     path: '/',
-    redirect: '/app/dashboard'
+    name: 'Root',
+    component: () => import('@/views/Login.vue'),
+    meta: {
+      title: '首页',
+      hideInMenu: true,
+      noAuth: true
+    }
   },
   {
     path: '/login',
@@ -70,24 +77,6 @@ const routes = [
           return { path: '/app/assets/list', query: { view: 'network' } }
         },
         meta: { title: '设备管理' }
-      },
-      {
-        path: 'network/devices/:id',
-        name: 'NetworkDeviceDetail',
-        component: () => import('@/views/network/Detail.vue'),
-        meta: { title: '设备详情' }
-      },
-      {
-        path: 'network/devices/create',
-        name: 'NetworkDeviceCreate',
-        component: () => import('@/views/network/DeviceForm.vue'),
-        meta: { title: '新增设备' }
-      },
-      {
-        path: 'network/devices/:id/edit',
-        name: 'NetworkDeviceEdit',
-        component: () => import('@/views/network/DeviceForm.vue'),
-        meta: { title: '编辑设备' }
       },
       {
         path: 'network/ports',
@@ -244,6 +233,24 @@ const routes = [
         name: 'Categories',
         component: () => import('@/views/categories/Management.vue'),
         meta: { title: '类别管理' }
+      },
+      {
+        path: 'dictionary/maintenance-types',
+        name: 'MaintenanceTypes',
+        component: () => import('@/views/dictionary/MaintenanceTypes.vue'),
+        meta: { title: '运维记录类型管理' }
+      },
+      {
+        path: 'dictionary/maintenance-categories',
+        name: 'MaintenanceCategories',
+        component: () => import('@/views/dictionary/MaintenanceCategories.vue'),
+        meta: { title: '运维维护类别管理' }
+      },
+      {
+        path: 'dictionary/departments',
+        name: 'Departments',
+        component: () => import('@/views/dictionary/Departments.vue'),
+        meta: { title: '组织机构管理' }
       }
     ]
   },
@@ -286,21 +293,57 @@ router.beforeEach((to, from, next) => {
     noAuth: to.meta.noAuth
   })
   
-  // 不需要认证的页面
+  // 增强的登录状态检查：同时检查store状态和token有效性
+  const token = getSecureToken()
+  const tokenValid = token && !isTokenExpired(token)
+  
+  console.log('路由守卫: 登录状态检查', {
+    hasToken: !!token,
+    tokenValid,
+    storeLoggedIn: userStore.isLoggedIn,
+    hasUserInfo: !!userStore.userInfo
+  })
+  
+  const isAuthenticated = userStore.isLoggedIn && userStore.userInfo && tokenValid
+  
+  // 特殊处理：用户主动访问登录页面时清除持久化状态
+  if (to.path === '/login' || to.path === '/') {
+    console.log('路由守卫: 用户主动访问登录页面，清除持久化状态')
+    // 清除所有登录状态，要求重新登录
+    userStore.clearUserData()
+    
+    // 如果访问根路径，重定向到登录页
+    if (to.path === '/') {
+      next('/login')
+      return
+    }
+    
+    // 访问登录页，直接通过
+    next()
+    return
+  }
+  
+  // 不需要认证的页面（除了登录页）
   if (to.meta.noAuth) {
     console.log('路由守卫: 不需要认证的页面，直接通过')
     next()
     return
   }
   
-  // 检查用户是否已登录
-  if (!userStore.isLoggedIn || !userStore.userInfo) {
-    console.log('路由守卫: 用户未登录，跳转到登录页')
+  // 需要认证的页面：检查登录状态
+  if (!isAuthenticated) {
+    console.log('路由守卫: 用户未登录或token无效，跳转到登录页')
+    
+    // 清除无效状态
+    if (!tokenValid) {
+      userStore.clearUserData()
+    }
+    
     next('/login')
     return
   }
   
-  console.log('路由守卫: 检查通过，允许访问')
+  console.log('路由守卫: 检查通过，允许访问内部页面')
   next()
 })
 

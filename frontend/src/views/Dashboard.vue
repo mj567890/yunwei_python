@@ -53,11 +53,6 @@
           <div class="action-title">新增资产</div>
         </div>
         
-        <div class="action-card" @click="navigateTo('/app/network/devices/create')">
-          <div class="action-icon">🖥️</div>
-          <div class="action-title">新增设备</div>
-        </div>
-        
         <div class="action-card" @click="navigateTo('/app/maintenance/create')">
           <div class="action-icon">📋</div>
           <div class="action-title">新增运维</div>

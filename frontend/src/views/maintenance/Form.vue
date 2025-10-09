@@ -47,19 +47,25 @@
 
               <div class="form-group">
                 <label class="required">记录类型</label>
-                <select v-model="form.record_type" class="form-control" :class="{ error: errors.record_type }">
-                  <option value="">请选择记录类型</option>
-                  <option v-for="type in recordTypes" :key="type" :value="type">{{ type }}</option>
-                </select>
+                <HierarchicalSelect
+                  v-model="form.record_type"
+                  :items="recordTypesData"
+                  :loading="loadingTypes"
+                  :hasError="!!errors.record_type"
+                  placeholder="请选择记录类型"
+                />
                 <span v-if="errors.record_type" class="error-text">{{ errors.record_type }}</span>
               </div>
 
               <div class="form-group">
                 <label class="required">维护类别</label>
-                <select v-model="form.category" class="form-control" :class="{ error: errors.category }">
-                  <option value="">请选择维护类别</option>
-                  <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
-                </select>
+                <HierarchicalSelect
+                  v-model="form.category"
+                  :items="categoriesData"
+                  :loading="loadingCategories"
+                  :hasError="!!errors.category"
+                  placeholder="请选择维护类别"
+                />
                 <span v-if="errors.category" class="error-text">{{ errors.category }}</span>
               </div>
 
@@ -86,10 +92,13 @@
 
               <div class="form-group">
                 <label class="required">所属部门</label>
-                <select v-model="form.department" class="form-control" :class="{ error: errors.department }">
-                  <option value="">请选择部门</option>
-                  <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-                </select>
+                <HierarchicalSelect
+                  v-model="form.department"
+                  :items="departmentsData"
+                  :loading="loadingDepartments"
+                  :hasError="!!errors.department"
+                  placeholder="请选择部门"
+                />
                 <span v-if="errors.department" class="error-text">{{ errors.department }}</span>
               </div>
 
@@ -395,10 +404,25 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { dictionaryApi } from '@/api/dictionary'
 import { maintenanceApi } from '@/api/maintenance'
 import { assetApi } from '@/api/asset'
 import type { MaintenanceRecord, Asset, PriorityType } from '@/types/common'
 import { getStatusClass } from '@/types/common'
+import HierarchicalSelect from '@/components/form/HierarchicalSelect.vue'
+
+// 数据字典项接口
+interface DictItem {
+  id: number
+  name: string
+  code: string
+  description?: string
+  parent_id?: number | null
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at?: string
+}
 
 // 路由
 const router = useRouter()
@@ -452,6 +476,16 @@ const availableAssets = ref<Asset[]>([])
 const executionSteps = ref<any[]>([])
 const attachments = ref<any[]>([])
 
+// 层级数据字典数据
+const recordTypesData = ref<DictItem[]>([])
+const categoriesData = ref<DictItem[]>([])
+const departmentsData = ref<DictItem[]>([])
+
+// 加载状态
+const loadingTypes = ref(false)
+const loadingCategories = ref(false)
+const loadingDepartments = ref(false)
+
 // 计算属性
 const isEdit = computed(() => !!route.params.id)
 const maintenanceId = computed(() => route.params.id ? Number(route.params.id) : null)
@@ -476,11 +510,28 @@ onMounted(async () => {
 // 数据加载
 const loadInitialData = async () => {
   try {
-    const [typesRes, categoriesRes] = await Promise.all([
-      maintenanceApi.getMaintenanceTypes(),
-      maintenanceApi.getMaintenanceCategories()
+    // 加载层级数据
+    loadingTypes.value = true
+    loadingCategories.value = true
+    loadingDepartments.value = true
+    
+    const [
+      typesRes, 
+      categoriesRes, 
+      departmentsRes,
+      typesDataRes,
+      categoriesDataRes,
+      departmentsDataRes
+    ] = await Promise.all([
+      dictionaryApi.getTypesForForm(),
+      dictionaryApi.getCategoriesForForm(),
+      dictionaryApi.getDepartmentsForForm(),
+      dictionaryApi.getMaintenanceTypes(),
+      dictionaryApi.getMaintenanceCategories(),
+      dictionaryApi.getDepartments()
     ])
     
+    // 简化数据（备用）
     if (typesRes.success) {
       recordTypes.value = typesRes.data
     }
@@ -489,8 +540,27 @@ const loadInitialData = async () => {
       categories.value = categoriesRes.data
     }
     
-    // 模拟部门和用户数据
-    departments.value = ['IT部门', '运维部门', '技术部门', '网络部门']
+    if (departmentsRes.success) {
+      departments.value = departmentsRes.data
+    }
+    
+    // 层级数据
+    if (typesDataRes.success) {
+      recordTypesData.value = typesDataRes.data
+      loadingTypes.value = false
+    }
+    
+    if (categoriesDataRes.success) {
+      categoriesData.value = categoriesDataRes.data
+      loadingCategories.value = false
+    }
+    
+    if (departmentsDataRes.success) {
+      departmentsData.value = departmentsDataRes.data
+      loadingDepartments.value = false
+    }
+    
+    // 模拟用户数据
     users.value = [
       { id: 1, real_name: '张三' },
       { id: 2, real_name: '李四' },
@@ -499,6 +569,28 @@ const loadInitialData = async () => {
     ]
   } catch (error) {
     console.error('加载初始数据失败:', error)
+    
+    // 停止加载状态
+    loadingTypes.value = false
+    loadingCategories.value = false
+    loadingDepartments.value = false
+    
+    // 备用默认数据（如果 API 失败）
+    if (recordTypes.value.length === 0) {
+      recordTypes.value = ['例行维护', '紧急处理', '升级改造', '故障修复', '巡检']
+    }
+    if (categories.value.length === 0) {
+      categories.value = ['硬件维护', '软件维护', '网络设备', '系统巡检', '故障修复']
+    }
+    if (departments.value.length === 0) {
+      departments.value = ['IT部门', '运维部门', '技术部门', '网络部门']
+    }
+    users.value = [
+      { id: 1, real_name: '张三' },
+      { id: 2, real_name: '李四' },
+      { id: 3, real_name: '王五' },
+      { id: 4, real_name: '赵六' }
+    ]
   }
 }
 

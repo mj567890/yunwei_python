@@ -24,6 +24,7 @@ def init_api(app):
     from app.api.monitor import monitor_bp
     from app.api.asset_port import port_bp
     from app.api.category import category_bp
+    from app.api.dictionary import dictionary_bp
     
     # 注册子蓝图
     api_bp.register_blueprint(auth_bp, url_prefix='/auth')
@@ -38,6 +39,7 @@ def init_api(app):
     api_bp.register_blueprint(monitor_bp, url_prefix='/monitor')
     api_bp.register_blueprint(port_bp)  # 端口管理API
     api_bp.register_blueprint(category_bp, url_prefix='/categories')  # 类别管理API
+    api_bp.register_blueprint(dictionary_bp, url_prefix='/dictionary')  # 数据字典API
     
     # 注册健康检查蓝图（直接在根路径下）
     app.register_blueprint(health_bp)

@@ -27,6 +27,7 @@ declare module 'vue' {
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElRow: typeof import('element-plus/es')['ElRow']
     ElSelect: typeof import('element-plus/es')['ElSelect']
+    HierarchicalSelect: typeof import('./components/form/HierarchicalSelect.vue')['default']
     MobileLayout: typeof import('./components/MobileLayout.vue')['default']
     PortManager: typeof import('./components/assets/PortManager.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

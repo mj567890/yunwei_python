@@ -56,8 +56,9 @@
         <button @click="refreshTopology" :disabled="loading" class="btn btn-secondary">
           🔄 {{ loading ? '刷新中...' : '刷新' }}
         </button>
-        <button @click="saveTopology" class="btn btn-primary">
-          💾 保存布局
+        <button @click="saveTopology" :disabled="savingLayout" class="btn btn-primary" title="保存当前拓扑布局 (Ctrl+S)">
+          {{ savingLayout ? '🔄 保存中...' : '💾 保存布局' }}
+          <span v-if="hasUnsavedChanges && !savingLayout" class="unsaved-indicator" title="有未保存的改动">•</span>
         </button>
         <button @click="exportTopology" class="btn btn-secondary">
           📤 导出图片
@@ -597,6 +598,8 @@ import ConnectionDialog from '@/components/network/ConnectionDialog.vue'
 
 // 响应式数据
 const loading = ref(false)
+const savingLayout = ref(false) // 保存布局状态
+const hasUnsavedChanges = ref(false) // 是否有未保存的改动
 const nodes = ref<TopologyNode[]>([])
 const edges = ref<TopologyEdge[]>([])
 const selectedNode = ref<TopologyNode | null>(null)
@@ -664,8 +667,19 @@ const loadTopology = async () => {
       edges.value = response.data.edges
       updateTime.value = response.data.updated_at
       
-      // 初始化节点位置
+      // 初始化节点位置（优先使用保存的位置）
       initializeNodePositions()
+      
+      // 检查是否有保存的位置被恢复
+      const savedPositionCount = nodes.value.filter(node => 
+        typeof node.x === 'number' && typeof node.y === 'number' && 
+        !(node.x === 0 && node.y === 0) && 
+        node.x >= 50 && node.x <= 1500 && node.y >= 50 && node.y <= 1000
+      ).length
+      
+      if (savedPositionCount > 0) {
+        console.log(`📍 检测到 ${savedPositionCount} 个设备的保存位置已被恢复`)
+      }
     }
   } catch (error) {
     console.error('加载拓扑失败:', error)
@@ -682,16 +696,31 @@ const initializeNodePositions = () => {
   
   console.log('初始化节点位置，节点数量:', nodes.value.length)
   
+  let savedCount = 0
+  let newCount = 0
+  
   nodes.value.forEach((node: TopologyNode, index: number) => {
-    if (typeof node.x !== 'number' || typeof node.y !== 'number') {
+    // 只有当节点没有有效的保存位置时，才使用默认布局
+    if (typeof node.x !== 'number' || typeof node.y !== 'number' || node.x === 0 && node.y === 0) {
       const angle = (index * 2 * Math.PI) / nodes.value.length
       node.x = centerX + radius * Math.cos(angle)
       node.y = centerY + radius * Math.sin(angle)
-
+      console.log(`设备 ${node.name} 无保存位置，使用默认布局: (${node.x.toFixed(1)}, ${node.y.toFixed(1)})`)
+      newCount++
     } else {
-
+      console.log(`设备 ${node.name} 使用已保存位置: (${node.x}, ${node.y})`)
+      savedCount++
     }
   })
+  
+  if (savedCount > 0) {
+    console.log(`📍 成功恢复 ${savedCount} 个设备的保存位置，${newCount} 个设备使用默认布局`)
+  } else {
+    console.log(`🎲 所有 ${newCount} 个设备都使用默认布局（无保存的位置）`)
+  }
+  
+  // 清除未保存标记（刚加载时认为没有未保存的改动）
+  hasUnsavedChanges.value = false
 }
 
 // 获取设备图标
@@ -1159,6 +1188,9 @@ const handleNodeMouseDown = (node: TopologyNode, event: MouseEvent) => {
     dragNode.value.x = newX
     dragNode.value.y = newY
     
+    // 标记为有未保存的改动
+    hasUnsavedChanges.value = true
+    
     // 重置拖拽状态
     isDragging.value = false
     dragNode.value = null
@@ -1208,16 +1240,85 @@ const refreshTopology = () => {
 }
 
 const saveTopology = async () => {
+  // 防止重复保存
+  if (savingLayout.value) return
+  
+  // 显示确认对话框
+  const confirmSave = confirm(`确定要保存当前的拓扑布局吗？\n\n将保存 ${nodes.value.length} 个设备的位置信息。`)
+  
+  if (!confirmSave) return
+  
+  savingLayout.value = true
+  
   try {
-    const topologyData = { nodes, edges }
-    await networkApi.saveNetworkTopology({
-      name: '当前拓扑',
-      description: '用户保存的网络拓扑',
-      topology_data: topologyData
-    })
-    console.log('拓扑保存成功')
+    console.log('🔄 开始保存拓扑布局...')
+    
+    // 收集所有设备的当前位置信息
+    const positions = []
+    
+    for (const node of nodes.value) {
+      if (typeof node.x === 'number' && typeof node.y === 'number') {
+        positions.push({
+          id: node.id,
+          x: node.x,
+          y: node.y,
+          isLegacy: node.legacy || false // 区分传统设备和资产设备
+        })
+      }
+    }
+    
+    console.log(`📍 准备保存 ${positions.length} 个设备的位置信息`)
+    
+    if (positions.length === 0) {
+      alert('没有设备位置信息可保存')
+      return
+    }
+    
+    // 使用批量更新位置接口
+    const response = await networkApi.batchUpdatePositions(positions)
+    
+    if (response.success) {
+      console.log('✅ 拓扑布局保存成功')
+      
+      // 显示成功提示
+      alert(`✅ 拓扑布局保存成功！
+
+• 已保存 ${positions.length} 个设备的位置信息
+• 下次进入拓扑页面时将会自动恢复布局
+• 刷新或重新进入页面时位置不会丢失`)
+      
+      // 清除未保存标记
+      hasUnsavedChanges.value = false
+      
+      // 同时保存拓扑配置（保持向后兼容）
+      const topologyData = { 
+        nodes: nodes.value.map(node => ({
+          id: node.id,
+          name: node.name,
+          type: node.type,
+          x: node.x,
+          y: node.y,
+          legacy: node.legacy
+        })), 
+        edges: edges.value 
+      }
+      
+      await networkApi.saveNetworkTopology({
+        name: `拓扑布局_${new Date().toLocaleString('zh-CN')}`,
+        description: '用户手动保存的网络拓扑布局',
+        topology_data: topologyData
+      })
+      
+      console.log('📝 拓扑配置也已保存')
+    } else {
+      console.error('❌ 保存失败:', response.message)
+      alert('❌ 保存失败: ' + (response.message || '未知错误'))
+    }
   } catch (error) {
-    console.error('保存拓扑失败:', error)
+    console.error('💥 保存拓扑失败:', error)
+    alert('❌ 保存拓扑失败，请稍后重试')
+  } finally {
+    savingLayout.value = false
   }
 }
 
@@ -1465,6 +1566,32 @@ const openNewConnection = () => {
 
 // 初始化
 loadTopology()
+
+// 添加键盘快捷键支持
+const handleKeydown = (event: KeyboardEvent) => {
+  // Ctrl+S 保存布局
+  if (event.ctrlKey && event.key === 's') {
+    event.preventDefault()
+    saveTopology()
+  }
+  // Esc 关闭面板
+  if (event.key === 'Escape') {
+    if (selectedNode.value) {
+      closePanel()
+    }
+  }
+}
+
+// 组件挂载时添加事件监听
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+// 组件卸载时移除事件监听
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <style scoped>
@@ -1660,6 +1787,25 @@ loadTopology()
 
 .btn-primary { background: #409eff; color: white; }
 .btn-secondary { background: #909399; color: white; }
+.btn-success { background: #67c23a; color: white; }
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 未保存指示器 */
+.unsaved-indicator {
+  color: #ff6b6b;
+  font-size: 18px;
+  margin-left: 4px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
 .btn-icon {
   padding: 6px 8px;

@@ -70,6 +70,7 @@ export function setSecureToken(token: string): void {
     
     localStorage.setItem('secure_auth_token', finalToken)
     localStorage.setItem('token_version', '2.0') // 版本标识
+    localStorage.setItem('token_timestamp', timestamp.toString()) // 单独存储时间戳用于过期检查
     
     // 清理旧的存储
     localStorage.removeItem('encrypted_token')
@@ -80,6 +81,7 @@ export function setSecureToken(token: string): void {
     // 降级到单层加密
     const encryptedToken = encrypt(token)
     localStorage.setItem('encrypted_token', encryptedToken)
+    localStorage.setItem('token_timestamp', Date.now().toString())
   }
 }
 
@@ -152,6 +154,7 @@ export function getSecureToken(): string | null {
 export function clearSecureToken(): void {
   localStorage.removeItem('secure_auth_token')
   localStorage.removeItem('token_version')
+  localStorage.removeItem('token_timestamp')
   localStorage.removeItem('encrypted_token')
   localStorage.removeItem('token')
 }
@@ -167,7 +170,7 @@ export function generateSessionId(): string {
 /**
  * 验证Token是否过期
  * 注意：当前后端使用简单的token_urlsafe生成token，不是JWT格式
- * 暂时总是返回false（不过期），实际应该由后端验证
+ * 为了安全性，对于非JWT token，基于存储时间进行过期检查
  * @param token Token
  * @returns 是否过期
  */
@@ -188,8 +191,57 @@ export function isTokenExpired(token: string): boolean {
     }
   }
   
-  // 对于非JWT token（如token_urlsafe生成的），假设24小时有效期
-  // 实际应该由后端API调用来验证token有效性
+  // 对于非JWT token，检查存储时间戳进行过期验证
+  try {
+    const tokenVersion = localStorage.getItem('token_version')
+    
+    if (tokenVersion === '2.0') {
+      const secureToken = localStorage.getItem('secure_auth_token')
+      if (secureToken) {
+        const [encryptedData, salt] = atob(secureToken).split('::')
+        
+        if (encryptedData && salt) {
+          const decryptedData = CryptoJS.AES.decrypt(encryptedData, SECRET_KEY + salt).toString(CryptoJS.enc.Utf8)
+          
+          if (decryptedData) {
+            const tokenData = JSON.parse(decryptedData)
+            
+            // 检查token存储时间，如果超过8小时则认为过期
+            const now = Date.now()
+            const tokenAge = now - tokenData.timestamp
+            const maxAge = 8 * 60 * 60 * 1000 // 8小时
+            
+            if (tokenAge > maxAge) {
+              console.log('Token已过期（超过8小时）')
+              return true
+            }
+          }
+        }
+      }
+    }
+    
+    // 对于旧版本或明文存储，检查localStorage的时间戳
+    const tokenTimestamp = localStorage.getItem('token_timestamp')
+    if (tokenTimestamp) {
+      const timestamp = parseInt(tokenTimestamp)
+      const now = Date.now()
+      const tokenAge = now - timestamp
+      const maxAge = 8 * 60 * 60 * 1000 // 8小时
+      
+      if (tokenAge > maxAge) {
+        console.log('Token已过期（超过8小时）')
+        return true
+      }
+    } else {
+      // 没有时间戳记录，认为过期（为了安全）
+      console.log('Token没有时间戳记录，认为过期')
+      return true
+    }
+  } catch (error) {
+    console.error('Token过期检查失败:', error)
+    return true
+  }
+  
   return false
 }
 

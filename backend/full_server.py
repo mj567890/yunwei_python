@@ -104,6 +104,10 @@ class Asset(db.Model):
     ip_address = db.Column(db.String(15))
     mac_address = db.Column(db.String(17))
     
+    # 位置信息（网络拓扑用）
+    x_position = db.Column(db.Float)
+    y_position = db.Column(db.Float)
+    
     # 其他信息
     remark = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -316,7 +320,7 @@ def get_network_topology():
         
         nodes = []
         for asset in assets:
-            print(f"  处理设备: {asset.name} ({asset.category})")
+            print(f"  处理设备: {asset.name} ({asset.category}) - 位置: x={asset.x_position}, y={asset.y_position}")
             # 获取设备端口
             ports = AssetPort.query.filter_by(asset_id=asset.id, is_deleted=False).all()
             print(f"    端口数量: {len(ports)}")
@@ -327,8 +331,9 @@ def get_network_topology():
                 'type': asset.category,
                 'ip': asset.ip_address,
                 'status': asset.status or '正常',
-                'x': 400 + (asset.id % 10) * 80,  # 简单布局
-                'y': 300 + (asset.id % 8) * 60,
+                # 优先使用保存的位置，否则使用默认布局
+                'x': asset.x_position if asset.x_position is not None else 400 + (asset.id % 10) * 80,
+                'y': asset.y_position if asset.y_position is not None else 300 + (asset.id % 8) * 60,
                 'ports': [{
                     'id': port.id,
                     'port_name': port.port_name,
@@ -491,7 +496,64 @@ def save_network_topology():
 @app.route('/api/network/topology/positions', methods=['PUT'])
 def batch_update_positions():
     """批量更新设备位置"""
-    return jsonify({'success': True, 'message': '位置更新成功'})
+    print("🔄 批量更新设备位置API被调用")
+    try:
+        data = request.get_json() or {}
+        positions = data.get('positions', [])
+        
+        if not positions:
+            print("❌ 位置数据为空")
+            return jsonify({'success': False, 'message': '位置数据不能为空'}), 400
+        
+        print(f"📍 收到 {len(positions)} 个位置更新请求")
+        
+        updated_count = 0
+        
+        for pos in positions:
+            device_id = pos.get('id')
+            x = pos.get('x', 0)
+            y = pos.get('y', 0)
+            is_legacy = pos.get('isLegacy', False)
+            
+            print(f"  处理设备 ID:{device_id}, x:{x}, y:{y}, legacy:{is_legacy}")
+            
+            if is_legacy:
+                # 处理传统设备
+                print(f"    处理传统设备 {device_id}")
+                continue  # 暂时跳过传统设备
+            else:
+                # 处理资产设备
+                try:
+                    asset = Asset.query.filter_by(id=device_id).first()
+                    if asset:
+                        asset.x_position = float(x) if x else 0
+                        asset.y_position = float(y) if y else 0
+                        updated_count += 1
+                        print(f"    ✅ 更新资产 {asset.name} 位置: ({x}, {y})")
+                    else:
+                        print(f"    ❌ 未找到资产 ID:{device_id}")
+                except Exception as e:
+                    print(f"    💥 更新资产 {device_id} 失败: {e}")
+        
+        # 提交数据库更改
+        db.session.commit()
+        print(f"✅ 成功更新 {updated_count} 个设备位置")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'成功更新{updated_count}个设备位置',
+            'updated_count': updated_count
+        })
+        
+    except Exception as e:
+        print(f"💥 批量更新位置失败: {e}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return jsonify({
+            'success': False, 
+            'message': f'批量更新设备位置失败: {str(e)}'
+        }), 500
 
 @app.route('/api/network/devices/<int:device_id>/fault', methods=['POST'])
 def mark_device_fault(device_id):
@@ -2718,6 +2780,282 @@ def get_ports_statistics_batch():
             'status': 'error',
             'code': 500,
             'message': '获取端口统计失败'
+        }), 500
+
+# =================== 数据字典API ===================
+
+@app.route('/api/dictionary/maintenance/types', methods=['GET'])
+def get_maintenance_types_for_form():
+    """为运维记录表单提供类型选项"""
+    try:
+        import sqlite3
+        
+        db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT name FROM dict_maintenance_type 
+            WHERE is_active = 1 AND (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY sort_order, name
+        ''')
+        
+        types = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        # 如果数据字典为空，返回默认值
+        if not types:
+            types = ['例行维护', '紧急处理', '升级改造', '故障修复', '巡检']
+        
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取运维类型成功',
+            'data': types
+        })
+        
+    except Exception as e:
+        print(f'获取运维类型失败: {e}')
+        # 返回默认数据
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取运维类型成功',
+            'data': ['例行维护', '紧急处理', '升级改造', '故障修复', '巡检']
+        })
+
+@app.route('/api/dictionary/maintenance/categories', methods=['GET'])
+def get_maintenance_categories_for_form():
+    """为运维记录表单提供类别选项"""
+    try:
+        import sqlite3
+        
+        db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT name FROM dict_maintenance_category 
+            WHERE is_active = 1 AND (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY sort_order, name
+        ''')
+        
+        categories = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        # 如果数据字典为空，返回默认值
+        if not categories:
+            categories = ['硬件维护', '软件维护', '网络设备', '系统巡检', '故障修复']
+        
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取维护类别成功',
+            'data': categories
+        })
+        
+    except Exception as e:
+        print(f'获取维护类别失败: {e}')
+        # 返回默认数据
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取维护类别成功',
+            'data': ['硬件维护', '软件维护', '网络设备', '系统巡检', '故障修复']
+        })
+
+@app.route('/api/dictionary/departments/simple', methods=['GET'])
+def get_departments_for_form():
+    """为表单提供部门选项"""
+    try:
+        import sqlite3
+        
+        db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT name FROM dict_department 
+            WHERE is_active = 1 AND (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY sort_order, name
+        ''')
+        
+        departments = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        # 如果数据字典为空，返回默认值
+        if not departments:
+            departments = ['IT部门', '运维部门', '技术部门', '网络部门']
+        
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取部门列表成功',
+            'data': departments
+        })
+        
+    except Exception as e:
+        print(f'获取部门列表失败: {e}')
+        # 返回默认数据
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取部门列表成功',
+            'data': ['IT部门', '运维部门', '技术部门', '网络部门']
+        })
+
+@app.route('/api/dictionary/maintenance-types', methods=['GET'])
+def get_maintenance_types():
+    """获取运维记录类型列表"""
+    try:
+        import sqlite3
+        
+        db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, name, code, description, parent_id, sort_order, is_active, created_at, updated_at
+            FROM dict_maintenance_type 
+            WHERE (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY sort_order, created_at
+        ''')
+        
+        types = []
+        for row in cursor.fetchall():
+            types.append({
+                'id': row[0],
+                'name': row[1],
+                'code': row[2],
+                'description': row[3],
+                'parent_id': row[4],
+                'sort_order': row[5],
+                'is_active': bool(row[6]),
+                'created_at': row[7],
+                'updated_at': row[8]
+            })
+        
+        conn.close()
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取运维记录类型列表成功',
+            'data': types
+        })
+        
+    except Exception as e:
+        print(f'获取运维记录类型列表失败: {e}')
+        return jsonify({
+            'success': False,
+            'status': 'error',
+            'code': 500,
+            'message': f'获取运维记录类型列表失败: {str(e)}'
+        }), 500
+
+# 简化的数据字典管理API（只提供列表查看功能）
+@app.route('/api/dictionary/maintenance-categories', methods=['GET'])
+def get_maintenance_categories():
+    """获取运维维护类别列表"""
+    try:
+        import sqlite3
+        
+        db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, name, code, description, parent_id, sort_order, is_active, created_at, updated_at
+            FROM dict_maintenance_category 
+            WHERE (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY sort_order, created_at
+        ''')
+        
+        categories = []
+        for row in cursor.fetchall():
+            categories.append({
+                'id': row[0],
+                'name': row[1],
+                'code': row[2],
+                'description': row[3],
+                'parent_id': row[4],
+                'sort_order': row[5],
+                'is_active': bool(row[6]),
+                'created_at': row[7],
+                'updated_at': row[8]
+            })
+        
+        conn.close()
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取运维维护类别列表成功',
+            'data': categories
+        })
+        
+    except Exception as e:
+        print(f'获取运维维护类别列表失败: {e}')
+        return jsonify({
+            'success': False,
+            'status': 'error',
+            'code': 500,
+            'message': f'获取运维维护类别列表失败: {str(e)}'
+        }), 500
+
+@app.route('/api/dictionary/departments', methods=['GET'])
+def get_departments():
+    """获取组织机构列表"""
+    try:
+        import sqlite3
+        
+        db_path = os.path.join(os.path.dirname(__file__), 'it_ops_system.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, name, code, description, parent_id, sort_order, is_active, created_at, updated_at
+            FROM dict_department 
+            WHERE (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY sort_order, created_at
+        ''')
+        
+        departments = []
+        for row in cursor.fetchall():
+            departments.append({
+                'id': row[0],
+                'name': row[1],
+                'code': row[2],
+                'description': row[3],
+                'parent_id': row[4],
+                'sort_order': row[5],
+                'is_active': bool(row[6]),
+                'created_at': row[7],
+                'updated_at': row[8]
+            })
+        
+        conn.close()
+        return jsonify({
+            'success': True,
+            'status': 'success',
+            'code': 200,
+            'message': '获取组织机构列表成功',
+            'data': departments
+        })
+        
+    except Exception as e:
+        print(f'获取组织机构列表失败: {e}')
+        return jsonify({
+            'success': False,
+            'status': 'error',
+            'code': 500,
+            'message': f'获取组织机构列表失败: {str(e)}'
         }), 500
 
 # 测试数据初始化函数

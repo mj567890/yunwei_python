@@ -4,6 +4,10 @@
 from datetime import datetime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, DateTime
+from flask_sqlalchemy import SQLAlchemy
+
+# 导入db对象，在__init__.py中初始化
+from app import db
 
 
 class BaseModel(db.Model):

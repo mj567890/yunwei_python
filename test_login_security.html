@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录安全测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #409eff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        .output {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success { border-left: 4px solid #28a745; }
+        .error { border-left: 4px solid #dc3545; }
+        .warning { border-left: 4px solid #ffc107; }
+    </style>
+</head>
+<body>
+    <h1>🔐 登录安全性测试工具</h1>
+    
+    <div class="test-section">
+        <h3>当前状态检查</h3>
+        <button onclick="checkCurrentState()">检查当前登录状态</button>
+        <button onclick="checkTokenState()">检查Token状态</button>
+        <button onclick="checkLocalStorage()">检查LocalStorage</button>
+        <div id="stateOutput" class="output"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>登录测试</h3>
+        <button onclick="testLogin()">测试登录</button>
+        <button onclick="testLogout()">测试登出</button>
+        <div id="loginOutput" class="output"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>安全测试</h3>
+        <button onclick="simulateServerRestart()">模拟服务器重启（清除后端状态）</button>
+        <button onclick="simulateTokenExpiry()">模拟Token过期</button>
+        <button onclick="clearAllStorage()">清除所有本地存储</button>
+        <div id="securityOutput" class="output"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+
+        function log(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            container.innerHTML = `<div class="${className}">${new Date().toLocaleTimeString()}: ${message}</div>` + container.innerHTML;
+        }
+
+        async function checkCurrentState() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${getStoredToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('stateOutput', `✅ 用户已登录: ${data.data.username}`, 'success');
+                } else {
+                    log('stateOutput', `❌ 用户未登录或Token无效: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log('stateOutput', `❌ 网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        function checkTokenState() {
+            const token = getStoredToken();
+            if (token) {
+                const isExpired = checkTokenExpired(token);
+                log('stateOutput', `🔑 Token存在，过期状态: ${isExpired ? '已过期' : '有效'}`, isExpired ? 'warning' : 'success');
+            } else {
+                log('stateOutput', '🔑 没有找到Token', 'warning');
+            }
+        }
+
+        function checkLocalStorage() {
+            const storage = {
+                'secure_auth_token': localStorage.getItem('secure_auth_token'),
+                'token_version': localStorage.getItem('token_version'),
+                'token_timestamp': localStorage.getItem('token_timestamp'),
+                'user-store': localStorage.getItem('user-store')
+            };
+            
+            log('stateOutput', `📱 LocalStorage状态:\n${JSON.stringify(storage, null, 2)}`, 'info');
+        }
+
+        async function testLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // 模拟前端存储Token
+                    setTestToken(data.data.access_token);
+                    log('loginOutput', `✅ 登录成功: ${data.data.user.username}`, 'success');
+                } else {
+                    log('loginOutput', `❌ 登录失败: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log('loginOutput', `❌ 登录错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testLogout() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getStoredToken()}`
+                    }
+                });
+
+                if (response.ok) {
+                    clearTestStorage();
+                    log('loginOutput', '✅ 登出成功', 'success');
+                } else {
+                    log('loginOutput', `❌ 登出失败: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log('loginOutput', `❌ 登出错误: ${error.message}`, 'error');
+            }
+        }
+
+        function simulateServerRestart() {
+            log('securityOutput', '🔄 模拟服务器重启...', 'warning');
+            log('securityOutput', '📝 在真实情况下，服务器重启后应该要求用户重新登录', 'info');
+            log('securityOutput', '🔍 请重新检查登录状态，看是否需要重新登录', 'info');
+        }
+
+        function simulateTokenExpiry() {
+            // 修改localStorage中的时间戳，使Token看起来过期
+            const oldTimestamp = localStorage.getItem('token_timestamp');
+            const expiredTimestamp = Date.now() - (9 * 60 * 60 * 1000); // 9小时前
+            localStorage.setItem('token_timestamp', expiredTimestamp.toString());
+            
+            log('securityOutput', `⏰ 已将Token时间戳修改为9小时前`, 'warning');
+            log('securityOutput', `📝 原时间戳: ${oldTimestamp}`, 'info');
+            log('securityOutput', `📝 新时间戳: ${expiredTimestamp}`, 'info');
+            log('securityOutput', '🔍 现在检查Token状态应该显示为过期', 'info');
+        }
+
+        function clearAllStorage() {
+            localStorage.clear();
+            log('securityOutput', '🧹 已清除所有LocalStorage数据', 'success');
+        }
+
+        // 辅助函数
+        function getStoredToken() {
+            return localStorage.getItem('secure_auth_token') || 
+                   localStorage.getItem('encrypted_token') || 
+                   localStorage.getItem('token') || '';
+        }
+
+        function setTestToken(token) {
+            const timestamp = Date.now();
+            localStorage.setItem('token', token);
+            localStorage.setItem('token_timestamp', timestamp.toString());
+        }
+
+        function clearTestStorage() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('token_timestamp');
+            localStorage.removeItem('secure_auth_token');
+            localStorage.removeItem('user-store');
+        }
+
+        function checkTokenExpired(token) {
+            const tokenTimestamp = localStorage.getItem('token_timestamp');
+            if (tokenTimestamp) {
+                const timestamp = parseInt(tokenTimestamp);
+                const now = Date.now();
+                const tokenAge = now - timestamp;
+                const maxAge = 8 * 60 * 60 * 1000; // 8小时
+                return tokenAge > maxAge;
+            }
+            return true;
+        }
+    </script>
+</body>
+</html>
